@@ -65,7 +65,7 @@ Generated images will be saved to the `outputs/` folder (created automatically).
 If you find this useful for your research, please cite the following:
 
 ```bibtex
-@misc{issachar2025dypedynamic,
+@misc{issachar2025dype,
       title={DyPE: Dynamic Position Extrapolation for Ultra High Resolution Diffusion}, 
       author={Noam Issachar and Guy Yariv and Sagie Benaim and Yossi Adi and Dani Lischinski and Raanan Fattal},
       year={2025},
