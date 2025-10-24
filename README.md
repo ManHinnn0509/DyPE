@@ -3,7 +3,7 @@
 <div align="center">
 
 [![Project Page](https://img.shields.io/badge/Project-Page-green.svg)](https://noamissachar.github.io/DyPE/)
-[![arXiv](https://img.shields.io/badge/arXiv-Paper-b31b1b.svg)]()
+[![arXiv](https://img.shields.io/badge/arXiv-Paper-b31b1b.svg)](https://arxiv.org/abs/2510.20766)
 
 </div>
 
@@ -65,10 +65,13 @@ Generated images will be saved to the `outputs/` folder (created automatically).
 If you find this useful for your research, please cite the following:
 
 ```bibtex
-@article{dype2025,
-  title={DyPE: Dynamic Position Extrapolation for Ultra High Resolution Diffusion},
-  author={},
-  journal={arXiv preprint arXiv:},
-  year={2025}
+@misc{issachar2025dypedynamic,
+      title={DyPE: Dynamic Position Extrapolation for Ultra High Resolution Diffusion}, 
+      author={Noam Issachar and Guy Yariv and Sagie Benaim and Yossi Adi and Dani Lischinski and Raanan Fattal},
+      year={2025},
+      eprint={2510.20766},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2510.20766}, 
 }
 ```
