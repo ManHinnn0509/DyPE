@@ -62,7 +62,7 @@ Generated images will be saved to the `outputs/` folder (created automatically).
 
 ## License and Commercial Use
 
-This work is patent pending. For commercial use or licensing inquiries, please contact the [authors](mailto:guy.yariv@mail.huji.ac.il).
+This work is patent pending. For commercial use or licensing inquiries, please contact the [authors](mailto:noam.issachar@mail.huji.ac.il).
 
 ## Citation
 
