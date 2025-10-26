@@ -60,12 +60,16 @@ python run_dype.py --method base
 
 Generated images will be saved to the `outputs/` folder (created automatically).
 
+## License and Commercial Use
+
+This work is patent pending. For commercial use or licensing inquiries, please contact the [authors](mailto:guy.yariv@mail.huji.ac.il).
+
 ## Citation
 
 If you find this useful for your research, please cite the following:
 
 ```bibtex
-@misc{issachar2025dype,
+@misc{issachar2025dypedynamicpositionextrapolation,
       title={DyPE: Dynamic Position Extrapolation for Ultra High Resolution Diffusion}, 
       author={Noam Issachar and Guy Yariv and Sagie Benaim and Yossi Adi and Dani Lischinski and Raanan Fattal},
       year={2025},
