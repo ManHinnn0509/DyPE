@@ -39,6 +39,9 @@ pip install -r requirements.txt
 # missing in requirements.txt
 pip install sqlalchemy
 pip install protobuf
+
+# for the interface
+pip install gradio
 ```
 
 5. Run the script (if you want)
@@ -48,7 +51,7 @@ python run_dype.py --prompt "Your text prompt here"
 
 Things I want to do:
 - [ ] Add Gradio interface
-- [ ] Use the uncensored version of the model used in this repo (?)
+- [ ] Use the uncensored version of the model used in this repo ([?](https://www.reddit.com/r/StableDiffusion/comments/1iqtoag/an_abliterated_version_of_flux1dev_that_reduces/))
 
 ## TL;DR
 
