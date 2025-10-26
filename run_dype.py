@@ -9,6 +9,7 @@ import os
 from flux.pipeline_flux import FluxPipeline
 from flux.transformer_flux import FluxTransformer2DModel
 # from diffusers import FluxTransformer2DModel
+from huggingface_hub import login
 
 
 def main():
@@ -38,7 +39,21 @@ def main():
         help='Disable DyPE (dynamic position encoding)'
     )
 
+    # new, because the model is gated
+    parser.add_argument(
+        '--hf_token',
+        type=str,
+        default=os.getenv('HF_TOKEN') or os.getenv('HUGGING_FACE_HUB_TOKEN'),
+        help='Hugging Face token (or set HF_TOKEN / HUGGING_FACE_HUB_TOKEN)'
+    )
+
     args = parser.parse_args()
+
+    hf_token = args.hf_token
+    if hf_token:
+        login(token=hf_token)
+    else:
+        print("No HF token provided; relying on prior `huggingface-cli login` or env var.")
 
     # Create output directory if it doesn't exist
     os.makedirs("outputs", exist_ok=True)
