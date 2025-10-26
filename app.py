@@ -1,4 +1,4 @@
-import os, sys, argparse
+import os, sys, argparse, time
 
 from typing import Optional, Tuple
 
@@ -53,7 +53,7 @@ def _pick_dtype(device: str, dtype_opt: str):
     return torch.float32
 
 
-def load_pipeline(use_dype: bool, method: str, hf_token: Optional[str], dtype_opt: str):
+def load_pipeline(use_dype: bool, method: str, hf_token: Optional[str], dtype_opt: str, model: str):
     global _PIPELINE, _PIPELINE_KEY
 
     key = (use_dype, method, dtype_opt)
@@ -71,7 +71,8 @@ def load_pipeline(use_dype: bool, method: str, hf_token: Optional[str], dtype_op
 
     # Load transformer with DyPE toggles/method
     transformer = FluxTransformer2DModel.from_pretrained(
-        "black-forest-labs/FLUX.1-Krea-dev",
+        #"black-forest-labs/FLUX.1-Krea-dev",
+        model,
         subfolder="transformer",
         torch_dtype=dtype,
         dype=use_dype,
@@ -79,7 +80,8 @@ def load_pipeline(use_dype: bool, method: str, hf_token: Optional[str], dtype_op
     )
 
     pipe = FluxPipeline.from_pretrained(
-        "black-forest-labs/FLUX.1-Krea-dev",
+        #"black-forest-labs/FLUX.1-Krea-dev",
+        model,
         transformer=transformer,
         torch_dtype=dtype,
     )
@@ -110,8 +112,9 @@ def generate(
     guidance_scale: float,
     hf_token: str,
     dtype_opt: str,
+    model: str
 ):
-    pipe = load_pipeline(use_dype=enable_dype, method=method, hf_token=hf_token or None, dtype_opt=dtype_opt)
+    pipe = load_pipeline(use_dype=enable_dype, method=method, hf_token=hf_token or None, dtype_opt=dtype_opt, model=model)
 
     device = _pick_device()
     try:
@@ -132,7 +135,8 @@ def generate(
     ).images[0]
 
     method_name = f"dy_{method}" if enable_dype else method
-    filename = f"outputs/seed_{seed}_method_{method_name}_res_{height}x{width}.png"
+    ts = str(int(time.time()))
+    filename = f"outputs/seed_{seed}_method_{method_name}_res_{width}x{height}_{ts}.png"
     image.save(filename)
 
     return image, filename
@@ -143,24 +147,34 @@ with gr.Blocks(title=TITLE, fill_height=True) as demo:
     gr.Markdown(DESCRIPTION)
 
     with gr.Row():
+        model = gr.Dropdown(
+            label='Model (Use the default one, the other ones are test)',
+            choices=[
+                "black-forest-labs/FLUX.1-Krea-dev",
+                # uncensored version from: https://huggingface.co/aoxo/flux.1dev-abliterated
+                # it can generate images but not sure if this is 100% working tho
+                "aoxo/flux.1dev-abliterated"
+            ],
+            value="black-forest-labs/FLUX.1-Krea-dev"
+        )
+        hf_token = gr.Textbox(label="Hugging Face token (if gated)", type="password", placeholder="hf_... (optional)")
+
+    with gr.Row():
         prompt = gr.Textbox(label="Prompt", value=DEFAULT_PROMPT, lines=4, autofocus=True)
 
     with gr.Row():
-        height = gr.Slider(512, 8192, value=4096, step=64, label="Height (px)")
         width = gr.Slider(512, 8192, value=4096, step=64, label="Width (px)")
+        height = gr.Slider(512, 8192, value=4096, step=64, label="Height (px)")
 
     with gr.Row():
         steps = gr.Slider(1, 64, value=28, step=1, label="Inference steps")
         guidance = gr.Slider(0.0, 10.0, value=4.5, step=0.1, label="Guidance scale")
 
     with gr.Row():
-        seed = gr.Number(value=0, precision=0, label="Seed")
+        seed = gr.Number(value=42, precision=0, label="Seed")
         method = gr.Dropdown(choices=["yarn", "ntk", "base"], value="yarn", label="Position method")
         dtype_opt = gr.Dropdown(choices=["auto", "bf16", "fp16", "fp32"], value="auto", label="Torch dtype")
         enable_dype = gr.Checkbox(value=True, label="Enable DyPE")
-
-    with gr.Row():
-        hf_token = gr.Textbox(label="Hugging Face token (if gated)", type="password", placeholder="hf_... (optional)")
 
     submit = gr.Button("🚀 Generate", variant="primary")
     out_img = gr.Image(label="Result", interactive=False)
@@ -168,7 +182,7 @@ with gr.Blocks(title=TITLE, fill_height=True) as demo:
 
     submit.click(
         fn=generate,
-        inputs=[prompt, height, width, steps, seed, method, enable_dype, guidance, hf_token, dtype_opt],
+        inputs=[prompt, height, width, steps, seed, method, enable_dype, guidance, hf_token, dtype_opt, model],
         outputs=[out_img, out_file],
         api_name="generate",
     )
