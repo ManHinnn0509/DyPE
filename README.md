@@ -11,6 +11,11 @@
 
 The model is gated, see [here](https://huggingface.co/black-forest-labs/FLUX.1-Krea-dev)
 
+Things I want to do:
+- [x] Add Gradio interface
+- [x] Use the uncensored version of the model used in this repo ([?](https://www.reddit.com/r/StableDiffusion/comments/1iqtoag/an_abliterated_version_of_flux1dev_that_reduces/))
+
+
 To set this up on Colab:
 
 1. Open the terminal
@@ -48,10 +53,6 @@ pip install gradio
 ```bash
 python run_dype.py --prompt "Your text prompt here"
 ```
-
-Things I want to do:
-- [x] Add Gradio interface
-- [x] Use the uncensored version of the model used in this repo ([?](https://www.reddit.com/r/StableDiffusion/comments/1iqtoag/an_abliterated_version_of_flux1dev_that_reduces/))
 
 ## TL;DR
 
