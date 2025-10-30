@@ -206,7 +206,7 @@ with gr.Blocks(title=TITLE, fill_height=True) as demo:
     submit.click(
         fn=generate,
         inputs=[prompt, height, width, steps, seed, method, enable_dype, guidance, hf_token, dtype_opt, model, randomize_seed],
-        outputs=[out_img, out_file],
+        outputs=[out_img, out_file, seed],
         api_name="generate",
     )
 
