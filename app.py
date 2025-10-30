@@ -14,11 +14,13 @@ except Exception:
     hf_login = None
 
 MODELS = [
+    # from: https://huggingface.co/black-forest-labs/FLUX.1-Krea-dev
     # default one
     "black-forest-labs/FLUX.1-Krea-dev",
     # uncensored version from: https://huggingface.co/aoxo/flux.1dev-abliterated
     # it can generate images but not sure if this is 100% working tho
     "aoxo/flux.1dev-abliterated",
+    # from: https://civitai.com/models/1931032?modelVersionId=2207453
     # 2048x2048 works but 4096x4096 is cooked somehow
     "ManHinnn0509/unstable-evo-krea-merged"
 ]
