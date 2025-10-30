@@ -140,9 +140,9 @@ def generate(
         used_seed = next_seed()
 
     try:
-        generator = torch.Generator(device).manual_seed(int(used_seed))
+        generator = torch.Generator(device).manual_seed(used_seed)
     except Exception:
-        generator = torch.Generator().manual_seed(int(used_seed))
+        generator = torch.Generator().manual_seed(used_seed)
 
     os.makedirs("outputs", exist_ok=True)
 
@@ -158,7 +158,7 @@ def generate(
 
     method_name = f"dy_{method}" if enable_dype else method
     ts = str(int(time.time()))
-    filename = f"outputs/seed_{seed}_method_{method_name}_res_{width}x{height}_{ts}.png"
+    filename = f"outputs/seed_{used_seed}_method_{method_name}_res_{width}x{height}_{ts}.png"
     image.save(filename)
 
     return image, filename, used_seed
