@@ -1,4 +1,4 @@
-import os, sys, argparse, time
+import os, sys, argparse, time, secrets
 
 from typing import Optional, Tuple
 
@@ -111,6 +111,11 @@ def load_pipeline(use_dype: bool, method: str, hf_token: Optional[str], dtype_op
     return pipe
 
 
+def next_seed() -> int:
+    # 0 .. 2^63-1 — safe for torch.Generator().manual_seed
+    return secrets.randbits(63)
+
+
 def generate(
     prompt: str,
     height: int,
@@ -122,15 +127,22 @@ def generate(
     guidance_scale: float,
     hf_token: str,
     dtype_opt: str,
-    model: str
+    model: str,
+    randomize_seed: bool
 ):
     pipe = load_pipeline(use_dype=enable_dype, method=method, hf_token=hf_token or None, dtype_opt=dtype_opt, model=model)
+    pipe: FluxPipeline
 
     device = _pick_device()
+
+    used_seed = int(seed)
+    if randomize_seed or used_seed < 0:   # negative seed also means "random"
+        used_seed = next_seed()
+
     try:
-        generator = torch.Generator(device).manual_seed(int(seed))
+        generator = torch.Generator(device).manual_seed(int(used_seed))
     except Exception:
-        generator = torch.Generator().manual_seed(int(seed))
+        generator = torch.Generator().manual_seed(int(used_seed))
 
     os.makedirs("outputs", exist_ok=True)
 
@@ -149,7 +161,7 @@ def generate(
     filename = f"outputs/seed_{seed}_method_{method_name}_res_{width}x{height}_{ts}.png"
     image.save(filename)
 
-    return image, filename
+    return image, filename, used_seed
 
 
 with gr.Blocks(title=TITLE, fill_height=True) as demo:
@@ -181,13 +193,19 @@ with gr.Blocks(title=TITLE, fill_height=True) as demo:
         dtype_opt = gr.Dropdown(choices=["auto", "bf16", "fp16", "fp32"], value="auto", label="Torch dtype")
         enable_dype = gr.Checkbox(value=True, label="Enable DyPE")
 
+    with gr.Row():
+        randomize_seed = gr.Checkbox(value=False, label="🎲 Randomize each run")
+        roll_btn = gr.Button("🎲 Roll seed now")
+
     submit = gr.Button("🚀 Generate", variant="primary")
     out_img = gr.Image(label="Result", interactive=False)
     out_file = gr.File(label="Saved image (.png)")
 
+    roll_btn.click(fn=next_seed, inputs=None, outputs=[seed])
+
     submit.click(
         fn=generate,
-        inputs=[prompt, height, width, steps, seed, method, enable_dype, guidance, hf_token, dtype_opt, model],
+        inputs=[prompt, height, width, steps, seed, method, enable_dype, guidance, hf_token, dtype_opt, model, randomize_seed],
         outputs=[out_img, out_file],
         api_name="generate",
     )
