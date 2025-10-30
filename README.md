@@ -25,6 +25,30 @@ ComfyUI workflow [here](https://github.com/wildminder/ComfyUI-DyPE)
 
 1. Open the terminal
 
+<details>
+
+<summary>One-time pasting</summary>
+
+```bash
+git clone https://github.com/ManHinnn0509/DyPE.git
+cd DyPE && mkdir -p ~/miniconda3
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda3/miniconda.sh
+bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3
+rm ~/miniconda3/miniconda.sh && source ~/miniconda3/bin/activate
+conda create -n dype python=3.10
+conda activate dype
+pip install -r requirements.txt
+
+# missing in requirements.txt
+pip install sqlalchemy
+pip install protobuf
+
+# for the interface
+pip install gradio
+```
+
+</details>
+
 2. Install miniconda
 ```bash
 mkdir -p ~/miniconda3
