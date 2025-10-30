@@ -13,6 +13,16 @@ try:
 except Exception:
     hf_login = None
 
+MODELS = [
+    # default one
+    "black-forest-labs/FLUX.1-Krea-dev",
+    # uncensored version from: https://huggingface.co/aoxo/flux.1dev-abliterated
+    # it can generate images but not sure if this is 100% working tho
+    "aoxo/flux.1dev-abliterated",
+    # 2048x2048 works but 4096x4096 is cooked somehow
+    "ManHinnn0509/unstable-evo-krea-merged"
+]
+
 
 TITLE = "DyPE (Dynamic Position Extrapolation) • FLUX.1-Krea-dev — Gradio UI"
 DESCRIPTION = """
@@ -71,7 +81,6 @@ def load_pipeline(use_dype: bool, method: str, hf_token: Optional[str], dtype_op
 
     # Load transformer with DyPE toggles/method
     transformer = FluxTransformer2DModel.from_pretrained(
-        #"black-forest-labs/FLUX.1-Krea-dev",
         model,
         subfolder="transformer",
         torch_dtype=dtype,
@@ -80,7 +89,6 @@ def load_pipeline(use_dype: bool, method: str, hf_token: Optional[str], dtype_op
     )
 
     pipe = FluxPipeline.from_pretrained(
-        #"black-forest-labs/FLUX.1-Krea-dev",
         model,
         transformer=transformer,
         torch_dtype=dtype,
@@ -149,12 +157,7 @@ with gr.Blocks(title=TITLE, fill_height=True) as demo:
     with gr.Row():
         model = gr.Dropdown(
             label='Model (Use the default one, the other ones are test)',
-            choices=[
-                "black-forest-labs/FLUX.1-Krea-dev",
-                # uncensored version from: https://huggingface.co/aoxo/flux.1dev-abliterated
-                # it can generate images but not sure if this is 100% working tho
-                "aoxo/flux.1dev-abliterated"
-            ],
+            choices=MODELS,
             value="black-forest-labs/FLUX.1-Krea-dev"
         )
         hf_token = gr.Textbox(label="Hugging Face token (if gated)", type="password", placeholder="hf_... (optional)")
