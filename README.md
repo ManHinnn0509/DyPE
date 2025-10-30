@@ -27,7 +27,7 @@ ComfyUI workflow [here](https://github.com/wildminder/ComfyUI-DyPE)
 
 <details>
 
-<summary>One-time pasting</summary>
+<summary>One-time pasting version</summary>
 
 ```bash
 git clone https://github.com/ManHinnn0509/DyPE.git
