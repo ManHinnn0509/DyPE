@@ -2,21 +2,26 @@
 
 <div align="center">
 
+Forked from [here](https://github.com/guyyariv/DyPE)
+
 [![Project Page](https://img.shields.io/badge/Project-Page-green.svg)](https://noamissachar.github.io/DyPE/)
 [![arXiv](https://img.shields.io/badge/arXiv-Paper-b31b1b.svg)](https://arxiv.org/abs/2510.20766)
 
 </div>
 
-## (Cloned) Notes for myself
+## Notes for myself
 
 The model is gated, see [here](https://huggingface.co/black-forest-labs/FLUX.1-Krea-dev)
 
-Things I want to do:
+ComfyUI workflow [here](https://github.com/wildminder/ComfyUI-DyPE)
+
+### Things I want to do:
+
 - [x] Add Gradio interface
-- [x] Use the uncensored version of the model used in this repo ([?](https://www.reddit.com/r/StableDiffusion/comments/1iqtoag/an_abliterated_version_of_flux1dev_that_reduces/))
+- [x] Use the [uncensored version](https://www.reddit.com/r/StableDiffusion/comments/1iqtoag/an_abliterated_version_of_flux1dev_that_reduces/) of the model used in this repo ([And some other more](https://github.com/guyyariv/DyPE/issues/6#issuecomment-3453466638))
 
 
-To set this up on Colab:
+### To set this up on Colab
 
 1. Open the terminal
 
@@ -53,6 +58,8 @@ pip install gradio
 ```bash
 python run_dype.py --prompt "Your text prompt here"
 ```
+
+---
 
 ## TL;DR
 
