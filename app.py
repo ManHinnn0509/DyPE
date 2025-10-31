@@ -90,7 +90,7 @@ def load_pipeline(use_dype: bool, method: str, hf_token: Optional[str], dtype_op
         try:
             hf_login(token=hf_token)
         except Exception as e:
-            print(f"[WARN] HF login failed: {e}")
+            print(f"[WARNING] HF login failed: {e}")
 
     device = _pick_device()
     dtype = _pick_dtype(device, dtype_opt)
@@ -144,6 +144,8 @@ def generate(
     model: str,
     randomize_seed: bool
 ):
+    print(f'[INFO] Selected model: {model}')
+
     pipe = load_pipeline(use_dype=enable_dype, method=method, hf_token=hf_token or None, dtype_opt=dtype_opt, model=model)
     pipe: FluxPipeline
 
