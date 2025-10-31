@@ -23,8 +23,6 @@ ComfyUI workflow [here](https://github.com/wildminder/ComfyUI-DyPE)
 
 ### To set this up on Colab
 
-1. Open the terminal
-
 <details>
 
 <summary>One-time pasting version</summary>
@@ -48,6 +46,8 @@ pip install gradio
 ```
 
 </details>
+
+1. Open the terminal
 
 2. Install miniconda
 ```bash
