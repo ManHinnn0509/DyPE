@@ -82,9 +82,21 @@ def _pick_dtype(device: str, dtype_opt: str):
 def load_pipeline(use_dype: bool, method: str, hf_token: Optional[str], dtype_opt: str, model: str):
     global _PIPELINE, _PIPELINE_KEY
 
-    key = (use_dype, method, dtype_opt)
+    key = (model, use_dype, method, dtype_opt)
     if _PIPELINE is not None and _PIPELINE_KEY == key:
         return _PIPELINE
+
+    # If we’re switching configs/models, free the old one
+    if _PIPELINE is not None and _PIPELINE_KEY != key:
+        try:
+            _PIPELINE.to("cpu")
+        except Exception:
+            pass
+        _PIPELINE = None
+        try:
+            torch.cuda.empty_cache()
+        except Exception:
+            pass
 
     if hf_token and hf_login is not None:
         try:
