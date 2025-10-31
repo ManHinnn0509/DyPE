@@ -17,12 +17,26 @@ MODELS = [
     # from: https://huggingface.co/black-forest-labs/FLUX.1-Krea-dev
     # default one
     "black-forest-labs/FLUX.1-Krea-dev",
+
     # uncensored version from: https://huggingface.co/aoxo/flux.1dev-abliterated
     # it can generate images but not sure if this is 100% working tho
     "aoxo/flux.1dev-abliterated",
+
     # from: https://civitai.com/models/1931032?modelVersionId=2207453
     # 2048x2048 works but 4096x4096 is cooked somehow
-    "ManHinnn0509/unstable-evo-krea-merged"
+    "ManHinnn0509/unStable-Evolution-KREA",
+
+    # from: https://civitai.com/models/679262/fux-capacity-nsfwporn-flux-base-model?modelVersionId=2298051
+    "massdync/Fux-Capacity",
+
+    # from: https://civitai.com/models/686814/jib-mix-flux?modelVersionId=2319074
+    "massdync/Jib-Mix-Flux",
+
+    # from: https://civitai.com/models/1775002?modelVersionId=2008873
+    "INtREPUS/Persephone",
+
+    # from: https://civitai.com/models/1799857/cyberrealistic-flux?modelVersionId=2287992
+    "INtREPUS/CyberRealistic-Flux"
 ]
 
 
