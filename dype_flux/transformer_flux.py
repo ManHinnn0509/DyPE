@@ -730,7 +730,7 @@ class FluxPosEmbed(nn.Module):
         return freqs_cos, freqs_sin
 
 
-class FluxTransformer2DModel(
+class DyPE_FluxTransformer2DModel(
     ModelMixin,
     ConfigMixin,
     PeftAdapterMixin,

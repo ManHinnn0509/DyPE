@@ -5,8 +5,8 @@ from typing import Optional, Tuple
 import torch
 import gradio as gr
 
-from flux.transformer_flux import FluxTransformer2DModel  # type: ignore
-from flux.pipeline_flux import FluxPipeline  # type: ignore
+from dype_flux.pipeline_flux import DyPE_FluxPipeline
+from dype_flux.transformer_flux import DyPE_FluxTransformer2DModel
 
 try:
     from huggingface_hub import login as hf_login
@@ -137,7 +137,7 @@ def load_pipeline(use_dype: bool, method: str, hf_token: Optional[str], dtype_op
     dtype = _pick_dtype(device, dtype_opt)
 
     # Load transformer with DyPE toggles/method
-    transformer = FluxTransformer2DModel.from_pretrained(
+    transformer = DyPE_FluxTransformer2DModel.from_pretrained(
         model,
         subfolder="transformer",
         torch_dtype=dtype,
@@ -145,7 +145,7 @@ def load_pipeline(use_dype: bool, method: str, hf_token: Optional[str], dtype_op
         method=method,
     )
 
-    pipe = FluxPipeline.from_pretrained(
+    pipe = DyPE_FluxPipeline.from_pretrained(
         model,
         transformer=transformer,
         torch_dtype=dtype,
@@ -188,7 +188,7 @@ def generate(
     print(f'[INFO] Selected model: {model}')
 
     pipe = load_pipeline(use_dype=enable_dype, method=method, hf_token=hf_token or None, dtype_opt=dtype_opt, model=model)
-    pipe: FluxPipeline
+    pipe: DyPE_FluxPipeline
 
     device = _pick_device()
 

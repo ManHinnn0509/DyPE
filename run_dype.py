@@ -6,8 +6,8 @@ DyPE: Dynamic Position Extrapolation for Ultra High Resolution Diffusion
 import torch
 import argparse
 import os
-from flux.pipeline_flux import FluxPipeline
-from flux.transformer_flux import FluxTransformer2DModel
+from dype_flux.pipeline_flux import DyPE_FluxPipeline
+from dype_flux.transformer_flux import DyPE_FluxTransformer2DModel
 # from diffusers import FluxTransformer2DModel
 from huggingface_hub import login
 
@@ -65,7 +65,7 @@ def main():
     use_dype = not args.no_dype
 
     # Load transformer with DyPE configuration
-    transformer = FluxTransformer2DModel.from_pretrained(
+    transformer = DyPE_FluxTransformer2DModel.from_pretrained(
         "black-forest-labs/FLUX.1-Krea-dev",
         subfolder="transformer",
         torch_dtype=torch.bfloat16,
@@ -74,7 +74,7 @@ def main():
     )
 
     # Initialize pipeline
-    pipe = FluxPipeline.from_pretrained(
+    pipe = DyPE_FluxPipeline.from_pretrained(
         "black-forest-labs/FLUX.1-Krea-dev",
         transformer=transformer,
         torch_dtype=torch.bfloat16
