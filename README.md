@@ -29,7 +29,8 @@ ComfyUI workflow [here](https://github.com/wildminder/ComfyUI-DyPE)
 
 ```bash
 git clone https://github.com/ManHinnn0509/DyPE.git
-cd DyPE && mkdir -p ~/miniconda3
+cd DyPE
+git checkout rework && mkdir -p ~/miniconda3
 wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda3/miniconda.sh
 bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3
 rm ~/miniconda3/miniconda.sh && source ~/miniconda3/bin/activate
@@ -61,6 +62,7 @@ rm ~/miniconda3/miniconda.sh
 ```bash
 git clone https://github.com/ManHinnn0509/DyPE.git
 cd DyPE
+git checkout rework
 ```
 
 4. Init conda, create venv and install dependencies
