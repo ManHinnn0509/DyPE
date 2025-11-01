@@ -9,6 +9,9 @@ Forked from [here](https://github.com/guyyariv/DyPE)
 
 </div>
 
+> [!NOTE]  
+> This branch is for reworking the Gradio interface
+
 ## Notes for myself
 
 The model is gated, see [here](https://huggingface.co/black-forest-labs/FLUX.1-Krea-dev)
