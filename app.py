@@ -13,14 +13,10 @@ from diffusers import FluxPipeline as HF_FluxPipeline
 
 from huggingface_hub import HfApi
 from huggingface_hub import hf_hub_download, snapshot_download
+from huggingface_hub import login as hf_login
 
 from dype_flux.pipeline_flux import DyPE_FluxPipeline
 from dype_flux.transformer_flux import DyPE_FluxTransformer2DModel
-
-try:
-    from huggingface_hub import login as hf_login
-except Exception:
-    hf_login = None
 
 # key: transformer, value: base model
 MODEL_PAIRS = {
@@ -176,7 +172,7 @@ def _get_pipeline(repo_base, repo_ckpt, enable_dype, method, dtype_opt):
     gr.Info(msg)
 
     pipe = DyPE_FluxPipeline.from_pretrained(
-        model,
+        base_path,
         transformer=transformer,
         torch_dtype=dtype,
     )
@@ -206,12 +202,8 @@ def generate(
     repo_base = MODEL_PAIRS[model]
     print(f'Model: {repo_ckpt} | Base: {repo_base} | token: {hf_token}')
 
-    if (hf_login):
+    if (hf_token):
         hf_login(hf_token)
-    else:
-        msg = '[WARNING] Function hf_login() not found, you are NOT logged in!'
-        print(msg)
-        gr.Warning(msg)
 
     pipe = _get_pipeline(repo_base, repo_ckpt, enable_dype, method, dtype_opt)
 
