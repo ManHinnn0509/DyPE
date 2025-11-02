@@ -207,16 +207,16 @@ def generate(
 
     pipe = _get_pipeline(repo_base, repo_ckpt, enable_dype, method, dtype_opt)
 
+    # random seed, -ve seed also means random
+    used_seed = int(seed)
+    if randomize_seed or used_seed < 0:
+        used_seed = next_seed()
+
     device = _pick_device()
     try:
         generator = torch.Generator(device).manual_seed(used_seed)
     except Exception:
         generator = torch.Generator().manual_seed(used_seed)
-
-    # random seed, -ve seed also means random
-    used_seed = int(seed)
-    if randomize_seed or used_seed < 0:
-        used_seed = next_seed()
     
     # Generate
     image = pipe(
@@ -257,9 +257,10 @@ with gr.Blocks(title=TITLE, fill_height=True, theme=THEME) as demo:
         prompt = gr.Textbox(label="Prompt", value=DEFAULT_PROMPT, lines=4, autofocus=True)
 
     with gr.Row():
+        MAX_RES = 8192
         STEPS = 16      # was 64
-        width = gr.Slider(512, 8192, value=4096, step=STEPS, label="Width (px)")
-        height = gr.Slider(512, 8192, value=4096, step=STEPS, label="Height (px)")
+        width = gr.Slider(512, MAX_RES, value=4096, step=STEPS, label="Width (px)")
+        height = gr.Slider(512, MAX_RES, value=4096, step=STEPS, label="Height (px)")
 
     with gr.Row():
         steps = gr.Slider(1, 64, value=28, step=1, label="Inference steps")
