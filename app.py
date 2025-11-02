@@ -206,6 +206,13 @@ def generate(
     repo_base = MODEL_PAIRS[model]
     print(f'Model: {repo_ckpt} | Base: {repo_base} | token: {hf_token}')
 
+    if (hf_login):
+        hf_login(hf_token)
+    else:
+        msg = '[WARNING] Function hf_login() not found, you are NOT logged in!'
+        print(msg)
+        gr.Warning(msg)
+
     pipe = _get_pipeline(repo_base, repo_ckpt, enable_dype, method, dtype_opt)
 
     device = _pick_device()
