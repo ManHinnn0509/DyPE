@@ -31,6 +31,8 @@ MODEL_PAIRS = {
     # from: https://civitai.com/models/1931032?modelVersionId=2207453
     # 2048x2048 works but 4096x4096 is cooked somehow
     "ManHinnn0509/unStable-Evolution-KREA-ckpt": "black-forest-labs/FLUX.1-Krea-dev",
+    # ^ this doesnt work, it outputs a noise image, need to find out why
+    # ^ probably needs to run this in Colab proof of concept notebook
     
     # from: https://civitai.com/models/679262/fux-capacity-nsfwporn-flux-base-model?modelVersionId=2298051
     "massdync/Fux-Capacity-ckpt": "black-forest-labs/FLUX.1-dev",
@@ -110,6 +112,9 @@ def _load_transformer_from_ckpt(repo_base: str, ckpt_path: str, method: str, use
         src.config, dype=use_dype, method=method
     ).to(dtype)
 
+    missing, unexpected = dype_transformer.load_state_dict(src.state_dict(), strict=False)
+    #print("missing:", len(missing), "unexpected:", len(unexpected))
+
     del tmp, src
     gc.collect()
     torch.cuda.empty_cache()
@@ -128,7 +133,7 @@ def _load_transformer_from_base(model: str, method: str, use_dype: bool, dtype):
 
 
 
-def _get_pipeline(repo_base, repo_ckpt, enable_dype, method, dtype_opt):
+def _get_pipeline(repo_base, repo_ckpt, hf_token, enable_dype, method, dtype_opt):
     global _PIPELINE, _PIPELINE_KEY
 
     key = (repo_base, repo_ckpt, enable_dype, method, dtype_opt)
@@ -205,7 +210,7 @@ def generate(
     if (hf_token):
         hf_login(hf_token)
 
-    pipe = _get_pipeline(repo_base, repo_ckpt, enable_dype, method, dtype_opt)
+    pipe = _get_pipeline(repo_base, repo_ckpt, hf_token, enable_dype, method, dtype_opt)
 
     # random seed, -ve seed also means random
     used_seed = int(seed)
