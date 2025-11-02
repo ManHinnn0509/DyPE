@@ -22,6 +22,7 @@ ComfyUI workflow [here](https://github.com/wildminder/ComfyUI-DyPE)
 
 - [x] Add Gradio interface
 - [x] Use the [uncensored version](https://www.reddit.com/r/StableDiffusion/comments/1iqtoag/an_abliterated_version_of_flux1dev_that_reduces/) of the model used in this repo ([And some other more](https://github.com/guyyariv/DyPE/issues/6#issuecomment-3453466638))
+- [ ] Write prompt, seed, method etc info into the generated image
 
 
 ### To set this up on Colab

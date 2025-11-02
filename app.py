@@ -1,9 +1,18 @@
-import os, sys, argparse, time, secrets
+from __future__ import annotations
+
+import os, sys, argparse, time, secrets, gc
 
 from typing import Optional, Tuple
 
 import torch
 import gradio as gr
+
+from transformers import CLIPTextModel, CLIPTokenizer, T5EncoderModel, T5TokenizerFast
+from diffusers import AutoencoderKL
+from diffusers import FluxPipeline as HF_FluxPipeline
+
+from huggingface_hub import HfApi
+from huggingface_hub import hf_hub_download, snapshot_download
 
 from dype_flux.pipeline_flux import DyPE_FluxPipeline
 from dype_flux.transformer_flux import DyPE_FluxTransformer2DModel
@@ -13,7 +22,6 @@ try:
 except Exception:
     hf_login = None
 
-''' # WIP
 # key: transformer, value: base model
 MODEL_PAIRS = {
     # from: https://huggingface.co/black-forest-labs/FLUX.1-Krea-dev
@@ -40,36 +48,8 @@ MODEL_PAIRS = {
     # from: https://civitai.com/models/1799857/cyberrealistic-flux?modelVersionId=2287992
     "INtREPUS/CyberRealistic-Flux": "black-forest-labs/FLUX.1-dev"
 }
-'''
 
-MODELS = [
-    # from: https://huggingface.co/black-forest-labs/FLUX.1-Krea-dev
-    # default one
-    "black-forest-labs/FLUX.1-Krea-dev",
-
-    # uncensored version from: https://huggingface.co/aoxo/flux.1dev-abliterated
-    # it can generate images but not sure if this is 100% working tho
-    "aoxo/flux.1dev-abliterated",
-
-    # from: https://civitai.com/models/1931032?modelVersionId=2207453
-    # 2048x2048 works but 4096x4096 is cooked somehow
-    "ManHinnn0509/unStable-Evolution-KREA",
-
-    # from: https://civitai.com/models/679262/fux-capacity-nsfwporn-flux-base-model?modelVersionId=2298051
-    "massdync/Fux-Capacity",
-
-    # from: https://civitai.com/models/686814/jib-mix-flux?modelVersionId=2319074
-    "massdync/Jib-Mix-Flux",
-
-    # from: https://civitai.com/models/1775002?modelVersionId=2008873
-    "INtREPUS/Persephone",
-
-    # from: https://civitai.com/models/1799857/cyberrealistic-flux?modelVersionId=2287992
-    "INtREPUS/CyberRealistic-Flux"
-]
-
-
-TITLE = "DyPE (Dynamic Position Extrapolation) • FLUX.1-Krea-dev — Gradio UI"
+TITLE = "DyPE (Dynamic Position Extrapolation) — Gradio UI"
 DESCRIPTION = """
 Ultra-high resolution text-to-image generation using **DyPE** on **FLUX.1-Krea-dev**.
 
@@ -81,42 +61,89 @@ Ultra-high resolution text-to-image generation using **DyPE** on **FLUX.1-Krea-d
 
 DEFAULT_PROMPT = "A mysterious woman stands confidently in elaborate, dark armor adorned with intricate designs, holding a staff, against a backdrop of smoke and an ominous red sky, with shadowy, gothic buildings in the distance."
 
+THEME = gr.themes.Ocean(
+    primary_hue="blue",
+    secondary_hue="violet",
+    radius_size="lg",
+)
+
 # Global cache so we don't reload every click
 _PIPELINE = None
-_PIPELINE_KEY: Tuple[bool, str, str] | None = None  # (use_dype, method, dtype_opt)
+_PIPELINE_KEY: Tuple[str, str, bool, str, str] | None = None  # (base, ckpt, use_dype, method, dtype_opt)
+
+def _download_models(api: HfApi, repo_ckpt: str, repo_base: str):
+    base_path = snapshot_download(repo_id=repo_base, repo_type='model')
+    # same repo, just snapshot_download
+    if (repo_ckpt == repo_base):
+        ckpt_path = base_path
+    # download ckpt repo & base repo
+    else:
+        files = api.list_repo_files(repo_id=repo_ckpt, repo_type='model')
+        ckpts = [i for i in files if (i.endswith('.safetensors'))]
+        if (not ckpts):
+            msg = f'No .safetensors file found in repo [{repo_ckpt}]'
+            print(msg)
+            raise gr.Error(msg)
+        ckpt_filename = ckpts[0]
+        ckpt_path = hf_hub_download(repo_ckpt, ckpt_filename, repo_type='model')
+    return ckpt_path, base_path
+
+def _load_transformer_from_ckpt(repo_base: str, ckpt_path: str, method: str, use_dype: bool, dtype):
+    text_encoder   = CLIPTextModel.from_pretrained(repo_base, subfolder="text_encoder", torch_dtype=dtype)
+    tokenizer      = CLIPTokenizer.from_pretrained(repo_base, subfolder="tokenizer")
+    text_encoder_2 = T5EncoderModel.from_pretrained(repo_base, subfolder="text_encoder_2", torch_dtype=dtype)
+    tokenizer_2    = T5TokenizerFast.from_pretrained(repo_base, subfolder="tokenizer_2")
+    vae            = AutoencoderKL.from_pretrained(repo_base, subfolder="vae", torch_dtype=dtype)
+
+    tmp = HF_FluxPipeline.from_single_file(
+        ckpt_path,
+        tokenizer=tokenizer,
+        tokenizer_2=tokenizer_2,
+        text_encoder=text_encoder,
+        text_encoder_2=text_encoder_2,
+        vae=vae,
+        torch_dtype=dtype,
+    )
+
+    del text_encoder, tokenizer, text_encoder_2, tokenizer_2, vae
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    src = tmp.transformer
+    dype_transformer = DyPE_FluxTransformer2DModel.from_config(
+        src.config, dype=use_dype, method=method
+    ).to(dtype)
+
+    del tmp, src
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    return dype_transformer
+
+def _load_transformer_from_base(model: str, method: str, use_dype: bool, dtype):
+    transformer = DyPE_FluxTransformer2DModel.from_pretrained(
+        model,
+        subfolder="transformer",
+        torch_dtype=dtype,
+        dype=use_dype,
+        method=method,
+    )
+    return transformer
 
 
-def _pick_device() -> str:
-    if torch.cuda.is_available():
-        return "cuda"
-    if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
-        return "mps"
-    return "cpu"
 
-
-def _pick_dtype(device: str, dtype_opt: str):
-    # Keep "auto" sensible; FLUX examples typically use bfloat16 on CUDA
-    if dtype_opt == "bf16":
-        return torch.bfloat16
-    if dtype_opt == "fp16":
-        return torch.float16
-    if dtype_opt == "fp32":
-        return torch.float32
-    # auto
-    if device == "cuda":
-        return torch.bfloat16
-    return torch.float32
-
-
-def load_pipeline(use_dype: bool, method: str, hf_token: Optional[str], dtype_opt: str, model: str):
+def _get_pipeline(repo_base, repo_ckpt, enable_dype, method, dtype_opt):
     global _PIPELINE, _PIPELINE_KEY
 
-    key = (model, use_dype, method, dtype_opt)
+    key = (repo_base, repo_ckpt, enable_dype, method, dtype_opt)
     if _PIPELINE is not None and _PIPELINE_KEY == key:
+        msg = f'Using cached pipeline: {key} ...'
+        print(msg)
+        gr.Info(msg)
         return _PIPELINE
 
     # If we’re switching configs/models, free the old one
-    if _PIPELINE is not None and _PIPELINE_KEY != key:
+    if (_PIPELINE is not None) and (_PIPELINE_KEY != key):
         try:
             _PIPELINE.to("cpu")
         except Exception:
@@ -127,48 +154,37 @@ def load_pipeline(use_dype: bool, method: str, hf_token: Optional[str], dtype_op
         except Exception:
             pass
 
-    if hf_token and hf_login is not None:
-        try:
-            hf_login(token=hf_token)
-        except Exception as e:
-            print(f"[WARNING] HF login failed: {e}")
+    try:
+        api = HfApi(token=hf_token)
+    except Exception as e:
+        msg = f"HF login failed: {e}"
+        print(msg)
+        gr.Warning(msg)
 
     device = _pick_device()
     dtype = _pick_dtype(device, dtype_opt)
 
-    # Load transformer with DyPE toggles/method
-    transformer = DyPE_FluxTransformer2DModel.from_pretrained(
-        model,
-        subfolder="transformer",
-        torch_dtype=dtype,
-        dype=use_dype,
-        method=method,
-    )
+    ckpt_path, base_path = _download_models(api, repo_ckpt, repo_base)
+    if (ckpt_path == base_path):
+        transformer = _load_transformer_from_base(base_path, method, enable_dype, dtype)
+        msg = f'Loading transformer from base...'
+    else:
+        transformer = _load_transformer_from_ckpt(base_path, ckpt_path, method, enable_dype, dtype)
+        msg = f'Loading transformer from ckpt...'
+    
+    print(msg)
+    gr.Info(msg)
 
     pipe = DyPE_FluxPipeline.from_pretrained(
         model,
         transformer=transformer,
         torch_dtype=dtype,
     )
-
-    # Try to enable offload (saves VRAM). Fallback to moving to device.
-    try:
-        pipe.enable_model_cpu_offload()
-    except Exception:
-        try:
-            if device != "cpu":
-                pipe.to(device)
-        except Exception as e:
-            print(f"[WARN] Could not move pipeline to device: {e}")
+    pipe.enable_model_cpu_offload()
 
     _PIPELINE = pipe
     _PIPELINE_KEY = key
     return pipe
-
-
-def next_seed() -> int:
-    # 0 .. 2^63-1 — safe for torch.Generator().manual_seed
-    return secrets.randbits(63)
 
 
 def generate(
@@ -185,24 +201,24 @@ def generate(
     model: str,
     randomize_seed: bool
 ):
-    print(f'[INFO] Selected model: {model}')
 
-    pipe = load_pipeline(use_dype=enable_dype, method=method, hf_token=hf_token or None, dtype_opt=dtype_opt, model=model)
-    pipe: DyPE_FluxPipeline
+    repo_ckpt = model
+    repo_base = MODEL_PAIRS[model]
+    print(f'Model: {repo_ckpt} | Base: {repo_base} | token: {hf_token}')
+
+    pipe = _get_pipeline(repo_base, repo_ckpt, enable_dype, method, dtype_opt)
 
     device = _pick_device()
-
-    used_seed = int(seed)
-    if randomize_seed or used_seed < 0:   # negative seed also means "random"
-        used_seed = next_seed()
-
     try:
         generator = torch.Generator(device).manual_seed(used_seed)
     except Exception:
         generator = torch.Generator().manual_seed(used_seed)
 
-    os.makedirs("outputs", exist_ok=True)
-
+    # random seed, -ve seed also means random
+    used_seed = int(seed)
+    if randomize_seed or used_seed < 0:
+        used_seed = next_seed()
+    
     # Generate
     image = pipe(
         prompt,
@@ -215,20 +231,25 @@ def generate(
 
     method_name = f"dy_{method}" if enable_dype else method
     ts = str(int(time.time()))
+
+    os.makedirs("outputs", exist_ok=True)
     filename = f"outputs/seed_{used_seed}_method_{method_name}_res_{width}x{height}_{ts}.png"
     image.save(filename)
 
     return image, filename, used_seed
 
+def next_seed() -> int:
+    # 0 .. 2^63-1 — safe for torch.Generator().manual_seed
+    return secrets.randbits(63)
 
-with gr.Blocks(title=TITLE, fill_height=True) as demo:
+with gr.Blocks(title=TITLE, fill_height=True, theme=THEME) as demo:
     gr.Markdown(f"# {TITLE}")
     gr.Markdown(DESCRIPTION)
 
     with gr.Row():
         model = gr.Dropdown(
             label='Model (Use the default one, the other ones are test)',
-            choices=MODELS,
+            choices=MODEL_PAIRS.keys(),
             value="black-forest-labs/FLUX.1-Krea-dev"
         )
         hf_token = gr.Textbox(label="Hugging Face token (if gated)", type="password", placeholder="hf_... (optional)")
@@ -237,8 +258,9 @@ with gr.Blocks(title=TITLE, fill_height=True) as demo:
         prompt = gr.Textbox(label="Prompt", value=DEFAULT_PROMPT, lines=4, autofocus=True)
 
     with gr.Row():
-        width = gr.Slider(512, 8192, value=4096, step=64, label="Width (px)")
-        height = gr.Slider(512, 8192, value=4096, step=64, label="Height (px)")
+        STEPS = 16      # was 64
+        width = gr.Slider(512, 8192, value=4096, step=STEPS, label="Width (px)")
+        height = gr.Slider(512, 8192, value=4096, step=STEPS, label="Height (px)")
 
     with gr.Row():
         steps = gr.Slider(1, 64, value=28, step=1, label="Inference steps")
@@ -268,6 +290,30 @@ with gr.Blocks(title=TITLE, fill_height=True) as demo:
     )
 
     gr.Markdown("Tip: First run may take a while to download weights. Images are saved under `./outputs/`.")
+
+# ========== utils ==========
+
+def _pick_device() -> str:
+    if torch.cuda.is_available():
+        return "cuda"
+    if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
+
+def _pick_dtype(device: str, dtype_opt: str):
+    # Keep "auto" sensible; FLUX examples typically use bfloat16 on CUDA
+    if dtype_opt == "bf16":
+        return torch.bfloat16
+    if dtype_opt == "fp16":
+        return torch.float16
+    if dtype_opt == "fp32":
+        return torch.float32
+    # auto
+    if device == "cuda":
+        return torch.bfloat16
+    return torch.float32
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
