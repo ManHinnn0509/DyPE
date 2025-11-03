@@ -30,21 +30,19 @@ MODEL_PAIRS = {
 
     # from: https://civitai.com/models/1931032?modelVersionId=2207453
     # 2048x2048 works but 4096x4096 is cooked somehow
-    "ManHinnn0509/unStable-Evolution-KREA-ckpt": "black-forest-labs/FLUX.1-Krea-dev",
-    # ^ this doesnt work, it outputs a noise image, need to find out why
-    # ^ probably needs to run this in Colab proof of concept notebook
+    "INtREPUS/unStable-Evolution-KREA-ckpt": "black-forest-labs/FLUX.1-Krea-dev",
     
     # from: https://civitai.com/models/679262/fux-capacity-nsfwporn-flux-base-model?modelVersionId=2298051
     "massdync/Fux-Capacity-ckpt": "black-forest-labs/FLUX.1-dev",
 
     # from: https://civitai.com/models/686814/jib-mix-flux?modelVersionId=2319074
-    #"massdync/Jib-Mix-Flux": "black-forest-labs/FLUX.1-dev",
+    "massdync/Jib-Mix-Flux-ckpt": "black-forest-labs/FLUX.1-dev",
 
     # from: https://civitai.com/models/1775002?modelVersionId=2008873
-    "INtREPUS/Persephone-ckpt": "black-forest-labs/FLUX.1-dev",
+    "massdync/Persephone-ckpt": "black-forest-labs/FLUX.1-dev",
 
     # from: https://civitai.com/models/1799857/cyberrealistic-flux?modelVersionId=2287992
-    #"INtREPUS/CyberRealistic-Flux": "black-forest-labs/FLUX.1-dev"
+    "massdync/CyberRealistic-Flux-ckpt": "black-forest-labs/FLUX.1-dev"
 }
 
 TITLE = "DyPE (Dynamic Position Extrapolation) — Gradio UI"
