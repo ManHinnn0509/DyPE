@@ -13,6 +13,7 @@ try:
 except Exception:
     hf_login = None
 
+# NOTE: This feature has been moved to `rework` branch
 ''' # WIP
 # key: transformer, value: base model
 MODEL_PAIRS = {
@@ -53,19 +54,19 @@ MODELS = [
 
     # from: https://civitai.com/models/1931032?modelVersionId=2207453
     # 2048x2048 works but 4096x4096 is cooked somehow
-    "ManHinnn0509/unStable-Evolution-KREA",
+    "ads4ow2o1/unStable-Evolution-KREA-merged",
 
     # from: https://civitai.com/models/679262/fux-capacity-nsfwporn-flux-base-model?modelVersionId=2298051
-    "massdync/Fux-Capacity",
+    "ads4ow1o1/Fux-Capacity-merged",
 
     # from: https://civitai.com/models/686814/jib-mix-flux?modelVersionId=2319074
-    "massdync/Jib-Mix-Flux",
+    "ads4ow1o1/Jib-Mix-Flux-merged",
 
     # from: https://civitai.com/models/1775002?modelVersionId=2008873
-    "INtREPUS/Persephone",
+    "ads4ow1o2/CyberRealistic-Flux-merged",
 
     # from: https://civitai.com/models/1799857/cyberrealistic-flux?modelVersionId=2287992
-    "INtREPUS/CyberRealistic-Flux"
+    "ads4ow1o2/Persephone-merged"
 ]
 
 
