@@ -54,7 +54,7 @@ MODELS = [
 
     # from: https://civitai.com/models/1931032?modelVersionId=2207453
     # 2048x2048 works but 4096x4096 is cooked somehow
-    "ads4ow2o1/unStable-Evolution-KREA-merged",
+    "ads4ow1o3/unStable-Evolution-KREA-merged",
 
     # from: https://civitai.com/models/679262/fux-capacity-nsfwporn-flux-base-model?modelVersionId=2298051
     "ads4ow1o1/Fux-Capacity-merged",
