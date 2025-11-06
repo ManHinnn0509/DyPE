@@ -2,17 +2,19 @@ from __future__ import annotations
 
 import os, sys, argparse, time, secrets, gc
 
+from textwrap import dedent
 from typing import Optional, Tuple
 
 import torch
 import gradio as gr
+import requests as req
 
 from transformers import CLIPTextModel, CLIPTokenizer, T5EncoderModel, T5TokenizerFast
 from diffusers import AutoencoderKL
 from diffusers import FluxPipeline as HF_FluxPipeline
 
 from huggingface_hub import HfApi
-from huggingface_hub import hf_hub_download, snapshot_download
+from huggingface_hub import hf_hub_download, snapshot_download, hf_hub_url
 from huggingface_hub import login as hf_login
 
 from dype_flux.pipeline_flux import DyPE_FluxPipeline
@@ -57,8 +59,10 @@ MODEL_PAIRS = {
     "ads4ow2o1/getphat-FLUX-Reality-NSFW-ckpt": "black-forest-labs/FLUX.1-dev",
 
     # https://huggingface.co/ads4ow2o2/Fluxmania-Kreamania
-    "ads4ow2o2/Fluxmania-Kreamania-ckpt": "black-forest-labs/FLUX.1-dev"
+    #"ads4ow2o2/Fluxmania-Kreamania-ckpt": "black-forest-labs/FLUX.1-dev"
+    # ^ somehow outputs something like a noise image, need to figure out why first
 }
+DEFAULT_CHOICE = "black-forest-labs/FLUX.1-Krea-dev"
 
 TITLE = "DyPE (Dynamic Position Extrapolation) — Gradio UI"
 DESCRIPTION = """
@@ -71,8 +75,6 @@ Ultra-high resolution text-to-image generation using **DyPE** on **FLUX.1-Krea-d
 """
 
 DEFAULT_PROMPT = "A mysterious woman stands confidently in elaborate, dark armor adorned with intricate designs, holding a staff, against a backdrop of smoke and an ominous red sky, with shadowy, gothic buildings in the distance."
-
-DROPDOWN_TITLE = 'Model (Use the default one, the other ones are test)'
 
 THEME = gr.themes.Ocean(
     primary_hue="blue",
@@ -284,20 +286,41 @@ def next_seed() -> int:
     # 0 .. 2^63-1 — safe for torch.Generator().manual_seed
     return secrets.randbits(63)
 
-def _format_dropdown_title(choice_key: str):
-    return f'{DROPDOWN_TITLE} | Base model: {MODEL_PAIRS[choice_key]}'
+def _format_model_info_markdown(choice_key: str, token: str | None=None):
+    base_model = MODEL_PAIRS[choice_key]
+    markdown = f'# {choice_key}' + '\n\n'
 
-def _update_dropdown_title(selected_key: str):
-    return gr.update(label=_format_dropdown_title(selected_key))
+    if (choice_key == base_model):
+        return markdown + f"Model url: https://huggingface.co/{base_model}"
+
+    url = hf_hub_url(choice_key, 'README.md')
+    r = req.get(
+        url,
+        headers={} if (not token) else {
+            "Authorization": f"Bearer {token}"
+        }
+    )
+
+    if (r.status_code == 200):
+        return markdown + r.text
+    elif (r.status_code == 404):
+        return markdown + f'ERROR: No README.md found in this repo'
+    else:   # usually this is 401
+        return markdown + f"ERROR: Unable to fetch content of README.md in `{choice_key}`, you need to provide a valid token"
+
+def _update_model_info_markdown(choice_key: str, token: str | None=None):
+    return _format_model_info_markdown(choice_key, token)
 
 with gr.Blocks(title=TITLE, fill_height=True, theme=THEME) as demo:
     gr.Markdown(f"# {TITLE}")
-    gr.Markdown(DESCRIPTION)
 
     with gr.Row():
-        DEFAULT_CHOICE = "black-forest-labs/FLUX.1-Krea-dev"
+        gr.Markdown(DESCRIPTION)
+        md = gr.Markdown(_format_model_info_markdown(DEFAULT_CHOICE))
+
+    with gr.Row():
         model = gr.Dropdown(
-            label=_format_dropdown_title(choice_key=DEFAULT_CHOICE),
+            label='Model (Use the default one, the other ones are test)',
             choices=MODEL_PAIRS.keys(),
             value=DEFAULT_CHOICE
         )
@@ -330,7 +353,8 @@ with gr.Blocks(title=TITLE, fill_height=True, theme=THEME) as demo:
     out_img = gr.Image(label="Result", interactive=False)
     out_file = gr.File(label="Saved image (.png)")
 
-    model.change(_update_dropdown_title, inputs=model, outputs=model)
+    #model.change(_update_dropdown_title, inputs=model, outputs=model)
+    model.change(_update_model_info_markdown, inputs=[model, hf_token], outputs=md)
     roll_btn.click(fn=next_seed, inputs=None, outputs=[seed])
 
     submit.click(
