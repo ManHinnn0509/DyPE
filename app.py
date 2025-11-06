@@ -89,11 +89,11 @@ def notify(msg: str):
     gr.Info(msg)
 
 def _download_models(api: HfApi, repo_ckpt: str, repo_base: str):
-    base_path = snapshot_download(repo_id=repo_base, repo_type='model')
     # same repo, just snapshot_download
     if (repo_ckpt == repo_base):
+        base_path = snapshot_download(repo_id=repo_base, repo_type='model')
         ckpt_path = base_path
-    # download ckpt repo & base repo
+    # download ckpt repo first then base repo
     else:
         files = api.list_repo_files(repo_id=repo_ckpt, repo_type='model')
         ckpts = [i for i in files if (i.endswith('.safetensors'))]
@@ -103,6 +103,8 @@ def _download_models(api: HfApi, repo_ckpt: str, repo_base: str):
             raise gr.Error(msg)
         ckpt_filename = ckpts[0]
         ckpt_path = hf_hub_download(repo_ckpt, ckpt_filename, repo_type='model')
+        base_path = snapshot_download(repo_id=repo_base, repo_type='model')
+
     return ckpt_path, base_path
 
 def _load_transformer_from_ckpt(repo_base: str, ckpt_path: str, method: str, use_dype: bool, dtype):
