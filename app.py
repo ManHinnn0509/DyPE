@@ -42,7 +42,22 @@ MODEL_PAIRS = {
     "massdync/Persephone-ckpt": "black-forest-labs/FLUX.1-dev",
 
     # from: https://civitai.com/models/1799857/cyberrealistic-flux?modelVersionId=2287992
-    "massdync/CyberRealistic-Flux-ckpt": "black-forest-labs/FLUX.1-dev"
+    "massdync/CyberRealistic-Flux-ckpt": "black-forest-labs/FLUX.1-dev",
+
+    # from: https://civitai.com/models/2086049?modelVersionId=2365910
+    "INtREPUS/FLUXTRAIT-ckpt": "black-forest-labs/FLUX.1-dev",
+
+    # from: https://civitai.com/models/978314/ultrareal-fine-tune?modelVersionId=1413133
+    "INtREPUS/UltraReal-Fine-Tune-ckpt": "black-forest-labs/FLUX.1-dev",
+
+    # from: https://civitai.com/models/161068?modelVersionId=979329
+    "ads4ow2o1/STOIQO-NewReality-ckpt": "black-forest-labs/FLUX.1-dev",
+
+    # from: https://civitai.com/models/861840?modelVersionId=2060393
+    "ads4ow2o1/getphat-FLUX-Reality-NSFW-ckpt": "black-forest-labs/FLUX.1-dev",
+
+    # https://huggingface.co/ads4ow2o2/Fluxmania-Kreamania
+    "ads4ow2o2/Fluxmania-Kreamania-ckpt": "black-forest-labs/FLUX.1-dev"
 }
 
 TITLE = "DyPE (Dynamic Position Extrapolation) — Gradio UI"
@@ -57,6 +72,8 @@ Ultra-high resolution text-to-image generation using **DyPE** on **FLUX.1-Krea-d
 
 DEFAULT_PROMPT = "A mysterious woman stands confidently in elaborate, dark armor adorned with intricate designs, holding a staff, against a backdrop of smoke and an ominous red sky, with shadowy, gothic buildings in the distance."
 
+DROPDOWN_TITLE = 'Model (Use the default one, the other ones are test)'
+
 THEME = gr.themes.Ocean(
     primary_hue="blue",
     secondary_hue="violet",
@@ -66,6 +83,10 @@ THEME = gr.themes.Ocean(
 # Global cache so we don't reload every click
 _PIPELINE = None
 _PIPELINE_KEY: Tuple[str, str, bool, str, str] | None = None  # (base, ckpt, use_dype, method, dtype_opt)
+
+def notify(msg: str):
+    print(msg)
+    gr.Info(msg)
 
 def _download_models(api: HfApi, repo_ckpt: str, repo_base: str):
     base_path = snapshot_download(repo_id=repo_base, repo_type='model')
@@ -129,16 +150,13 @@ def _load_transformer_from_base(model: str, method: str, use_dype: bool, dtype):
     )
     return transformer
 
-
-
 def _get_pipeline(repo_base, repo_ckpt, hf_token, enable_dype, method, dtype_opt):
     global _PIPELINE, _PIPELINE_KEY
 
     key = (repo_base, repo_ckpt, enable_dype, method, dtype_opt)
     if _PIPELINE is not None and _PIPELINE_KEY == key:
         msg = f'Using cached pipeline: {key} ...'
-        print(msg)
-        gr.Info(msg)
+        notify(msg)
         return _PIPELINE
 
     # If we’re switching configs/models, free the old one
@@ -171,8 +189,7 @@ def _get_pipeline(repo_base, repo_ckpt, hf_token, enable_dype, method, dtype_opt
         transformer = _load_transformer_from_ckpt(base_path, ckpt_path, method, enable_dype, dtype)
         msg = f'Loading transformer from ckpt...'
     
-    print(msg)
-    gr.Info(msg)
+    notify(msg)
 
     pipe = DyPE_FluxPipeline.from_pretrained(
         base_path,
@@ -240,19 +257,47 @@ def generate(
 
     return image, filename, used_seed
 
+# ===== utils =====
+def _pick_device() -> str:
+    if torch.cuda.is_available():
+        return "cuda"
+    if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
+def _pick_dtype(device: str, dtype_opt: str):
+    # Keep "auto" sensible; FLUX examples typically use bfloat16 on CUDA
+    if dtype_opt == "bf16":
+        return torch.bfloat16
+    if dtype_opt == "fp16":
+        return torch.float16
+    if dtype_opt == "fp32":
+        return torch.float32
+    # auto
+    if device == "cuda":
+        return torch.bfloat16
+    return torch.float32
+
 def next_seed() -> int:
     # 0 .. 2^63-1 — safe for torch.Generator().manual_seed
     return secrets.randbits(63)
+
+def _format_dropdown_title(choice_key: str):
+    return f'{DROPDOWN_TITLE} | Base model: {MODEL_PAIRS[choice_key]}'
+
+def _update_dropdown_title(selected_key: str):
+    return gr.update(label=_format_dropdown_title(selected_key))
 
 with gr.Blocks(title=TITLE, fill_height=True, theme=THEME) as demo:
     gr.Markdown(f"# {TITLE}")
     gr.Markdown(DESCRIPTION)
 
     with gr.Row():
+        DEFAULT_CHOICE = "black-forest-labs/FLUX.1-Krea-dev"
         model = gr.Dropdown(
-            label='Model (Use the default one, the other ones are test)',
+            label=_format_dropdown_title(choice_key=DEFAULT_CHOICE),
             choices=MODEL_PAIRS.keys(),
-            value="black-forest-labs/FLUX.1-Krea-dev"
+            value=DEFAULT_CHOICE
         )
         hf_token = gr.Textbox(label="Hugging Face token (if gated)", type="password", placeholder="hf_... (optional)")
 
@@ -260,10 +305,10 @@ with gr.Blocks(title=TITLE, fill_height=True, theme=THEME) as demo:
         prompt = gr.Textbox(label="Prompt", value=DEFAULT_PROMPT, lines=4, autofocus=True)
 
     with gr.Row():
-        MAX_RES = 8192
+        MAX_RES = 4096
         STEPS = 16      # was 64
-        width = gr.Slider(512, MAX_RES, value=4096, step=STEPS, label="Width (px)")
-        height = gr.Slider(512, MAX_RES, value=4096, step=STEPS, label="Height (px)")
+        width = gr.Slider(512, MAX_RES, value=MAX_RES // 2, step=STEPS, label="Width (px)")
+        height = gr.Slider(512, MAX_RES, value=MAX_RES // 2, step=STEPS, label="Height (px)")
 
     with gr.Row():
         steps = gr.Slider(1, 64, value=28, step=1, label="Inference steps")
@@ -283,6 +328,7 @@ with gr.Blocks(title=TITLE, fill_height=True, theme=THEME) as demo:
     out_img = gr.Image(label="Result", interactive=False)
     out_file = gr.File(label="Saved image (.png)")
 
+    model.change(_update_dropdown_title, inputs=model, outputs=model)
     roll_btn.click(fn=next_seed, inputs=None, outputs=[seed])
 
     submit.click(
@@ -293,30 +339,6 @@ with gr.Blocks(title=TITLE, fill_height=True, theme=THEME) as demo:
     )
 
     gr.Markdown("Tip: First run may take a while to download weights. Images are saved under `./outputs/`.")
-
-# ========== utils ==========
-
-def _pick_device() -> str:
-    if torch.cuda.is_available():
-        return "cuda"
-    if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
-        return "mps"
-    return "cpu"
-
-
-def _pick_dtype(device: str, dtype_opt: str):
-    # Keep "auto" sensible; FLUX examples typically use bfloat16 on CUDA
-    if dtype_opt == "bf16":
-        return torch.bfloat16
-    if dtype_opt == "fp16":
-        return torch.float16
-    if dtype_opt == "fp32":
-        return torch.float32
-    # auto
-    if device == "cuda":
-        return torch.bfloat16
-    return torch.float32
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
