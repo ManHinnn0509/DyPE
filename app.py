@@ -20,8 +20,17 @@ from huggingface_hub import login as hf_login
 from dype_flux.pipeline_flux import DyPE_FluxPipeline
 from dype_flux.transformer_flux import DyPE_FluxTransformer2DModel
 
+QWEN_MODEL_PAIRS = {
+    # from: https://huggingface.co/Qwen/Qwen-Image
+    # default one
+    'Qwen/Qwen-Image': 'Qwen/Qwen-Image',
+
+    # from: https://huggingface.co/Qwen/Qwen-Image-2512
+    'Qwen/Qwen-Image-2512': 'Qwen/Qwen-Image-2512'
+}
+
 # key: transformer, value: base model
-MODEL_PAIRS = {
+FLUX_MODEL_PAIRS = {
     # from: https://huggingface.co/black-forest-labs/FLUX.1-Krea-dev
     # default one
     "black-forest-labs/FLUX.1-Krea-dev": "black-forest-labs/FLUX.1-Krea-dev",
@@ -62,6 +71,13 @@ MODEL_PAIRS = {
     #"ads4ow2o2/Fluxmania-Kreamania-ckpt": "black-forest-labs/FLUX.1-dev"
     # ^ somehow outputs something like a noise image, need to figure out why first
 }
+
+MODEL_PAIRS = {
+    'Flux': FLUX_MODEL_PAIRS,
+    'Qwen': QWEN_MODEL_PAIRS
+}
+
+DEFAULT_MODEL_TYPE = "Flux"
 DEFAULT_CHOICE = "black-forest-labs/FLUX.1-Krea-dev"
 
 TITLE = "DyPE (Dynamic Position Extrapolation) — Gradio UI"
@@ -218,13 +234,18 @@ def generate(
     guidance_scale: float,
     hf_token: str,
     dtype_opt: str,
+    model_type: str,
     model: str,
     randomize_seed: bool
 ):
 
+    pairs = _get_model_pairs(model_type)
+    if not model or model not in pairs:
+        raise gr.Error(f"No valid model selected for model type: {model_type}")
+
     repo_ckpt = model
-    repo_base = MODEL_PAIRS[model]
-    print(f'Model: {repo_ckpt} | Base: {repo_base} | token: {hf_token}')
+    repo_base = pairs[model]
+    print(f'Model type: {model_type} | Model: {repo_ckpt} | Base: {repo_base} | token: {hf_token}')
 
     if (hf_token):
         hf_login(hf_token)
@@ -286,8 +307,28 @@ def next_seed() -> int:
     # 0 .. 2^63-1 — safe for torch.Generator().manual_seed
     return secrets.randbits(63)
 
-def _format_model_info_markdown(choice_key: str, token: str | None=None):
-    base_model = MODEL_PAIRS[choice_key]
+def _get_model_pairs(model_type: str):
+    return MODEL_PAIRS.get(model_type, FLUX_MODEL_PAIRS)
+
+def _get_default_model_for_type(model_type: str):
+    pairs = _get_model_pairs(model_type)
+
+    if model_type == DEFAULT_MODEL_TYPE and DEFAULT_CHOICE in pairs:
+        return DEFAULT_CHOICE
+
+    # QWEN_MODEL_PAIRS is currently empty, so this safely returns None for now.
+    return next(iter(pairs), None)
+
+def _format_model_info_markdown(model_type: str, choice_key: str | None, token: str | None=None):
+    pairs = _get_model_pairs(model_type)
+
+    if not choice_key:
+        return f"# {model_type}\n\nNo models are defined for this model type yet."
+
+    if choice_key not in pairs:
+        return f"# {model_type}\n\nInvalid model choice: `{choice_key}`"
+
+    base_model = pairs[choice_key]
     markdown = f'# {choice_key}' + '\n\n'
 
     if (choice_key == base_model):
@@ -308,20 +349,34 @@ def _format_model_info_markdown(choice_key: str, token: str | None=None):
     else:   # usually this is 401
         return markdown + f"ERROR: Unable to fetch content of README.md in `{choice_key}`, you need to provide a valid token"
 
-def _update_model_info_markdown(choice_key: str, token: str | None=None):
-    return _format_model_info_markdown(choice_key, token)
+def _update_model_info_markdown(model_type: str, choice_key: str | None, token: str | None=None):
+    return _format_model_info_markdown(model_type, choice_key, token)
+
+def _update_model_dropdown(model_type: str, token: str | None=None):
+    pairs = _get_model_pairs(model_type)
+    default_model = _get_default_model_for_type(model_type)
+
+    return (
+        gr.update(choices=list(pairs.keys()), value=default_model),
+        _format_model_info_markdown(model_type, default_model, token)
+    )
 
 with gr.Blocks(title=TITLE, fill_height=True, theme=THEME) as demo:
     gr.Markdown(f"# {TITLE}")
 
     with gr.Row():
         gr.Markdown(DESCRIPTION)
-        md = gr.Markdown(_format_model_info_markdown(DEFAULT_CHOICE))
+        md = gr.Markdown(_format_model_info_markdown(DEFAULT_MODEL_TYPE, DEFAULT_CHOICE))
 
     with gr.Row():
+        model_type = gr.Dropdown(
+            label="Model type",
+            choices=list(MODEL_PAIRS.keys()),
+            value=DEFAULT_MODEL_TYPE,
+        )
         model = gr.Dropdown(
             label='Model (Use the default one, the other ones are test)',
-            choices=MODEL_PAIRS.keys(),
+            choices=list(_get_model_pairs(DEFAULT_MODEL_TYPE).keys()),
             value=DEFAULT_CHOICE
         )
         hf_token = gr.Textbox(label="Hugging Face token (if gated)", type="password", placeholder="hf_... (optional)")
@@ -354,12 +409,13 @@ with gr.Blocks(title=TITLE, fill_height=True, theme=THEME) as demo:
     out_file = gr.File(label="Saved image (.png)")
 
     #model.change(_update_dropdown_title, inputs=model, outputs=model)
-    model.change(_update_model_info_markdown, inputs=[model, hf_token], outputs=md)
+    model_type.change(_update_model_dropdown, inputs=[model_type, hf_token], outputs=[model, md])
+    model.change(_update_model_info_markdown, inputs=[model_type, model, hf_token], outputs=md)
     roll_btn.click(fn=next_seed, inputs=None, outputs=[seed])
 
     submit.click(
         fn=generate,
-        inputs=[prompt, height, width, steps, seed, method, enable_dype, guidance, hf_token, dtype_opt, model, randomize_seed],
+        inputs=[prompt, height, width, steps, seed, method, enable_dype, guidance, hf_token, dtype_opt, model_type, model, randomize_seed],
         outputs=[out_img, out_file, seed],
         api_name="generate",
     )
