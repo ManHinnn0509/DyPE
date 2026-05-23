@@ -12,7 +12,7 @@ from diffusers import DiffusionPipeline
 # Add local path to import the transformer
 sys.path.append(os.getcwd())
 try:
-    from qwen.transformer_qwenimage import QwenImageTransformer2DModel
+    from dype_qwen.transformer_qwenimage import QwenImageTransformer2DModel
 except ImportError:
     print("Could not import QwenImageTransformer from qwen.transformer_qwenimage")
     print("Ensure the file exists and the class name is correct.")
