@@ -10,7 +10,7 @@ import gradio as gr
 import requests as req
 
 from transformers import CLIPTextModel, CLIPTokenizer, T5EncoderModel, T5TokenizerFast
-from diffusers import AutoencoderKL
+from diffusers import AutoencoderKL, DiffusionPipeline
 from diffusers import FluxPipeline as HF_FluxPipeline
 
 from huggingface_hub import HfApi
@@ -20,13 +20,21 @@ from huggingface_hub import login as hf_login
 from dype_flux.pipeline_flux import DyPE_FluxPipeline
 from dype_flux.transformer_flux import DyPE_FluxTransformer2DModel
 
+try:
+    from dype_qwen.transformer_qwenimage import QwenImageTransformer2DModel
+    _QWEN_IMPORT_ERROR = None
+except Exception as e:
+    # Keep the Flux UI usable even if qwen files/deps are not present yet.
+    QwenImageTransformer2DModel = None
+    _QWEN_IMPORT_ERROR = e
+
 QWEN_MODEL_PAIRS = {
     # from: https://huggingface.co/Qwen/Qwen-Image
     # default one
-    'Qwen/Qwen-Image': 'Qwen/Qwen-Image',
+    "Qwen/Qwen-Image": "Qwen/Qwen-Image",
 
     # from: https://huggingface.co/Qwen/Qwen-Image-2512
-    'Qwen/Qwen-Image-2512': 'Qwen/Qwen-Image-2512'
+    "Qwen/Qwen-Image-2512": "Qwen/Qwen-Image-2512",
 }
 
 # key: transformer, value: base model
@@ -100,16 +108,16 @@ THEME = gr.themes.Ocean(
 
 # Global cache so we don't reload every click
 _PIPELINE = None
-_PIPELINE_KEY: Tuple[str, str, bool, str, str] | None = None  # (base, ckpt, use_dype, method, dtype_opt)
+_PIPELINE_KEY: Tuple[str, str, str, bool, str, str] | None = None  # (model_type, base, ckpt, use_dype, method, dtype_opt)
 
 def notify(msg: str):
     print(msg)
     gr.Info(msg)
 
-def _download_models(api: HfApi, repo_ckpt: str, repo_base: str):
+def _download_models(api: HfApi, repo_ckpt: str, repo_base: str, token: str | None = None):
     # same repo, just snapshot_download
     if (repo_ckpt == repo_base):
-        base_path = snapshot_download(repo_id=repo_base, repo_type='model')
+        base_path = snapshot_download(repo_id=repo_base, repo_type='model', token=token or None)
         ckpt_path = base_path
     # download ckpt repo first then base repo
     else:
@@ -120,8 +128,8 @@ def _download_models(api: HfApi, repo_ckpt: str, repo_base: str):
             print(msg)
             raise gr.Error(msg)
         ckpt_filename = ckpts[0]
-        ckpt_path = hf_hub_download(repo_ckpt, ckpt_filename, repo_type='model')
-        base_path = snapshot_download(repo_id=repo_base, repo_type='model')
+        ckpt_path = hf_hub_download(repo_ckpt, ckpt_filename, repo_type='model', token=token or None)
+        base_path = snapshot_download(repo_id=repo_base, repo_type='model', token=token or None)
 
     return ckpt_path, base_path
 
@@ -170,10 +178,10 @@ def _load_transformer_from_base(model: str, method: str, use_dype: bool, dtype):
     )
     return transformer
 
-def _get_pipeline(repo_base, repo_ckpt, hf_token, enable_dype, method, dtype_opt):
+def _get_flux_pipeline(repo_base, repo_ckpt, hf_token, enable_dype, method, dtype_opt):
     global _PIPELINE, _PIPELINE_KEY
 
-    key = (repo_base, repo_ckpt, enable_dype, method, dtype_opt)
+    key = ("Flux", repo_base, repo_ckpt, enable_dype, method, dtype_opt)
     if _PIPELINE is not None and _PIPELINE_KEY == key:
         msg = f'Using cached pipeline: {key} ...'
         notify(msg)
@@ -192,16 +200,17 @@ def _get_pipeline(repo_base, repo_ckpt, hf_token, enable_dype, method, dtype_opt
             pass
 
     try:
-        api = HfApi(token=hf_token)
+        api = HfApi(token=hf_token or None)
     except Exception as e:
-        msg = f"HF login failed: {e}"
+        msg = f"HF API init failed: {e}"
         print(msg)
         gr.Warning(msg)
+        api = HfApi()
 
     device = _pick_device()
     dtype = _pick_dtype(device, dtype_opt)
 
-    ckpt_path, base_path = _download_models(api, repo_ckpt, repo_base)
+    ckpt_path, base_path = _download_models(api, repo_ckpt, repo_base, hf_token or None)
     if (ckpt_path == base_path):
         transformer = _load_transformer_from_base(base_path, method, enable_dype, dtype)
         msg = f'Loading transformer from base...'
@@ -216,7 +225,87 @@ def _get_pipeline(repo_base, repo_ckpt, hf_token, enable_dype, method, dtype_opt
         transformer=transformer,
         torch_dtype=dtype,
     )
-    pipe.enable_model_cpu_offload()
+    try:
+        pipe.enable_model_cpu_offload()
+    except Exception:
+        pipe.to(device)
+
+    _PIPELINE = pipe
+    _PIPELINE_KEY = key
+    return pipe
+
+
+def _get_model_pairs(model_type: str):
+    return MODEL_PAIRS.get(model_type, FLUX_MODEL_PAIRS)
+
+
+def _get_default_model_for_type(model_type: str):
+    pairs = _get_model_pairs(model_type)
+
+    if model_type == DEFAULT_MODEL_TYPE and DEFAULT_CHOICE in pairs:
+        return DEFAULT_CHOICE
+
+    return next(iter(pairs), None)
+
+
+def _normalize_qwen_method(method: str, enable_dype: bool = True) -> tuple[str, bool]:
+    # Qwen's reference script only has two modes: dype/base.
+    # For Qwen, the method dropdown is the source of truth; the Flux-only
+    # Enable DyPE checkbox is hidden when Qwen is selected.
+    if method == "base":
+        return "base", False
+    return "dype", True
+
+
+def _get_qwen_pipeline(model_name: str, hf_token, enable_dype, method, dtype_opt):
+    global _PIPELINE, _PIPELINE_KEY
+
+    qwen_method, use_dype = _normalize_qwen_method(method, enable_dype)
+    key = ("Qwen", model_name, model_name, use_dype, qwen_method, dtype_opt)
+
+    if _PIPELINE is not None and _PIPELINE_KEY == key:
+        msg = f'Using cached pipeline: {key} ...'
+        notify(msg)
+        return _PIPELINE
+
+    if (_PIPELINE is not None) and (_PIPELINE_KEY != key):
+        try:
+            _PIPELINE.to("cpu")
+        except Exception:
+            pass
+        _PIPELINE = None
+        try:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception:
+            pass
+
+    if QwenImageTransformer2DModel is None:
+        raise gr.Error(
+            "Could not import dype_qwen.transformer_qwenimage.QwenImageTransformer2DModel. "
+            f"Original import error: {_QWEN_IMPORT_ERROR}"
+        )
+
+    device = _pick_device()
+    dtype = _pick_dtype(device, dtype_opt)
+
+    notify(f"Loading Qwen transformer from {model_name} (method={qwen_method})...")
+    transformer = QwenImageTransformer2DModel.from_pretrained(
+        model_name,
+        subfolder="transformer",
+        torch_dtype=dtype,
+        dype=use_dype,
+        token=hf_token or None,
+    )
+
+    notify(f"Loading Qwen pipeline from {model_name}...")
+    pipe = DiffusionPipeline.from_pretrained(
+        model_name,
+        transformer=transformer,
+        torch_dtype=dtype,
+        token=hf_token or None,
+    )
+    pipe = pipe.to(device)
 
     _PIPELINE = pipe
     _PIPELINE_KEY = key
@@ -238,19 +327,12 @@ def generate(
     model: str,
     randomize_seed: bool
 ):
-
     pairs = _get_model_pairs(model_type)
     if not model or model not in pairs:
         raise gr.Error(f"No valid model selected for model type: {model_type}")
 
     repo_ckpt = model
     repo_base = pairs[model]
-    print(f'Model type: {model_type} | Model: {repo_ckpt} | Base: {repo_base} | token: {hf_token}')
-
-    if (hf_token):
-        hf_login(hf_token)
-
-    pipe = _get_pipeline(repo_base, repo_ckpt, hf_token, enable_dype, method, dtype_opt)
 
     # random seed, -ve seed also means random
     used_seed = int(seed)
@@ -262,22 +344,48 @@ def generate(
         generator = torch.Generator(device).manual_seed(used_seed)
     except Exception:
         generator = torch.Generator().manual_seed(used_seed)
-    
-    # Generate
-    image = pipe(
-        prompt,
-        height=height,
-        width=width,
-        guidance_scale=guidance_scale,
-        generator=generator,
-        num_inference_steps=int(steps),
-    ).images[0]
-
-    method_name = f"dy_{method}" if enable_dype else method
-    ts = str(int(time.time()))
 
     os.makedirs("outputs", exist_ok=True)
-    filename = f"outputs/seed_{used_seed}_method_{method_name}_res_{width}x{height}_{ts}.png"
+    ts = str(int(time.time()))
+
+    if model_type == "Qwen":
+        qwen_method, _ = _normalize_qwen_method(method, enable_dype)
+        pipe = _get_qwen_pipeline(repo_ckpt, hf_token, enable_dype, method, dtype_opt)
+
+        # Same Qwen "magic" suffix as run_dype_qwen.py
+        positive_magic = ", Ultra HD, 4K, cinematic composition."
+        full_prompt = prompt + positive_magic
+        negative_prompt = " "
+
+        image = pipe(
+            prompt=full_prompt,
+            negative_prompt=negative_prompt,
+            width=width,
+            height=height,
+            num_inference_steps=int(steps),
+            true_cfg_scale=guidance_scale,
+            generator=generator,
+        ).images[0]
+
+        method_name = qwen_method
+    else:
+        if method not in ["yarn", "ntk", "base"]:
+            method = "yarn"
+
+        pipe = _get_flux_pipeline(repo_base, repo_ckpt, hf_token, enable_dype, method, dtype_opt)
+
+        image = pipe(
+            prompt,
+            height=height,
+            width=width,
+            guidance_scale=guidance_scale,
+            generator=generator,
+            num_inference_steps=int(steps),
+        ).images[0]
+
+        method_name = f"dy_{method}" if enable_dype else method
+
+    filename = f"outputs/{model_type.lower()}_seed_{used_seed}_method_{method_name}_res_{width}x{height}_{ts}.png"
     image.save(filename)
 
     return image, filename, used_seed
@@ -307,28 +415,16 @@ def next_seed() -> int:
     # 0 .. 2^63-1 — safe for torch.Generator().manual_seed
     return secrets.randbits(63)
 
-def _get_model_pairs(model_type: str):
-    return MODEL_PAIRS.get(model_type, FLUX_MODEL_PAIRS)
-
-def _get_default_model_for_type(model_type: str):
-    pairs = _get_model_pairs(model_type)
-
-    if model_type == DEFAULT_MODEL_TYPE and DEFAULT_CHOICE in pairs:
-        return DEFAULT_CHOICE
-
-    # QWEN_MODEL_PAIRS is currently empty, so this safely returns None for now.
-    return next(iter(pairs), None)
-
 def _format_model_info_markdown(model_type: str, choice_key: str | None, token: str | None=None):
-    pairs = _get_model_pairs(model_type)
-
     if not choice_key:
         return f"# {model_type}\n\nNo models are defined for this model type yet."
 
-    if choice_key not in pairs:
-        return f"# {model_type}\n\nInvalid model choice: `{choice_key}`"
+    pairs = _get_model_pairs(model_type)
+    base_model = pairs.get(choice_key)
 
-    base_model = pairs[choice_key]
+    if not base_model:
+        return f"# {choice_key}\n\nERROR: This model is not defined under `{model_type}`."
+
     markdown = f'# {choice_key}' + '\n\n'
 
     if (choice_key == base_model):
@@ -349,16 +445,32 @@ def _format_model_info_markdown(model_type: str, choice_key: str | None, token: 
     else:   # usually this is 401
         return markdown + f"ERROR: Unable to fetch content of README.md in `{choice_key}`, you need to provide a valid token"
 
-def _update_model_info_markdown(model_type: str, choice_key: str | None, token: str | None=None):
+
+def _update_model_info_markdown(model_type: str, choice_key: str, token: str | None=None):
     return _format_model_info_markdown(model_type, choice_key, token)
 
-def _update_model_dropdown(model_type: str, token: str | None=None):
+
+def _method_update_for_model_type(model_type: str):
+    if model_type == "Qwen":
+        return gr.update(choices=["dype", "base"], value="dype", label="Qwen method")
+    return gr.update(choices=["yarn", "ntk", "base"], value="yarn", label="Position method")
+
+
+def _enable_dype_update_for_model_type(model_type: str):
+    if model_type == "Qwen":
+        return gr.update(value=True, visible=False)
+    return gr.update(value=True, visible=True, label="Enable DyPE")
+
+
+def _update_model_type(model_type: str, token: str | None=None):
     pairs = _get_model_pairs(model_type)
     default_model = _get_default_model_for_type(model_type)
 
     return (
         gr.update(choices=list(pairs.keys()), value=default_model),
-        _format_model_info_markdown(model_type, default_model, token)
+        _format_model_info_markdown(model_type, default_model, token),
+        _method_update_for_model_type(model_type),
+        _enable_dype_update_for_model_type(model_type),
     )
 
 with gr.Blocks(title=TITLE, fill_height=True, theme=THEME) as demo:
@@ -409,7 +521,7 @@ with gr.Blocks(title=TITLE, fill_height=True, theme=THEME) as demo:
     out_file = gr.File(label="Saved image (.png)")
 
     #model.change(_update_dropdown_title, inputs=model, outputs=model)
-    model_type.change(_update_model_dropdown, inputs=[model_type, hf_token], outputs=[model, md])
+    model_type.change(_update_model_type, inputs=[model_type, hf_token], outputs=[model, md, method, enable_dype])
     model.change(_update_model_info_markdown, inputs=[model_type, model, hf_token], outputs=md)
     roll_btn.click(fn=next_seed, inputs=None, outputs=[seed])
 
