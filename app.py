@@ -257,6 +257,45 @@ def _normalize_qwen_method(method: str, enable_dype: bool = True) -> tuple[str, 
     return "dype", True
 
 
+
+def _patch_qwen_transformer_txt_seq_lens(transformer):
+    """
+    Compatibility patch for DyPE Qwen transformer copies based on older
+    diffusers/Qwen-Image code.
+
+    Newer diffusers QwenImagePipeline passes encoder_hidden_states_mask to
+    the transformer and does not pass the deprecated txt_seq_lens argument.
+    Some DyPE Qwen transformer copies still call:
+        self.pos_embed(img_shapes, txt_seq_lens, ...)
+    and crash when txt_seq_lens is None.
+
+    This wrapper reconstructs txt_seq_lens from encoder_hidden_states_mask
+    when available, otherwise falls back to encoder_hidden_states.shape[1].
+    """
+    if getattr(transformer, "_dype_txt_seq_lens_patched", False):
+        return transformer
+
+    original_forward = transformer.forward
+
+    def forward_with_txt_seq_lens(*args, **kwargs):
+        if kwargs.get("txt_seq_lens") is None:
+            mask = kwargs.get("encoder_hidden_states_mask")
+            encoder_hidden_states = kwargs.get("encoder_hidden_states")
+
+            if mask is not None:
+                # mask shape: [batch, text_sequence_length], 1 for valid tokens
+                kwargs["txt_seq_lens"] = mask.sum(dim=1).to(torch.int64).detach().cpu().tolist()
+            elif encoder_hidden_states is not None:
+                # diffusers may set mask to None when all tokens are valid.
+                # In that case, the whole sequence length is valid.
+                kwargs["txt_seq_lens"] = [encoder_hidden_states.shape[1]] * encoder_hidden_states.shape[0]
+
+        return original_forward(*args, **kwargs)
+
+    transformer.forward = forward_with_txt_seq_lens
+    transformer._dype_txt_seq_lens_patched = True
+    return transformer
+
 def _get_qwen_pipeline(model_name: str, hf_token, enable_dype, method, dtype_opt):
     global _PIPELINE, _PIPELINE_KEY
 
@@ -297,6 +336,7 @@ def _get_qwen_pipeline(model_name: str, hf_token, enable_dype, method, dtype_opt
         dype=use_dype,
         token=hf_token or None,
     )
+    transformer = _patch_qwen_transformer_txt_seq_lens(transformer)
 
     notify(f"Loading Qwen pipeline from {model_name}...")
     pipe = DiffusionPipeline.from_pretrained(
