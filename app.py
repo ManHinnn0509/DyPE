@@ -78,6 +78,12 @@ FLUX_MODEL_PAIRS = {
     # https://huggingface.co/ads4ow2o2/Fluxmania-Kreamania
     #"ads4ow2o2/Fluxmania-Kreamania-ckpt": "black-forest-labs/FLUX.1-dev"
     # ^ somehow outputs something like a noise image, need to figure out why first
+
+    # 20260526 from: https://civitai.red/models/1841315/candied-krea-version-10-realism?modelVersionId=2083736
+    'ads4ow1o5/Candied-Krea-v1-ckpt': 'black-forest-labs/FLUX.1-Krea-dev',
+
+    # 20260526 from: https://civitai.red/models/1841315/candied-krea-version-10-realism?modelVersionId=2086740
+    'ads4ow1o5/Candied-Krea-v1-TURBO-ckpt': 'black-forest-labs/FLUX.1-Krea-dev'
 }
 
 MODEL_PAIRS = {
